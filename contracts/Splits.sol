@@ -1,9 +1,7 @@
 //SPDX-License-Identifier: MIT
-pragma solidity >=0.6.0 <=0.8.7;
-// import "@OpenZeppelin/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-// import "@OpenZeppelin/openzeppelin-contracts/contracts/utils/math/SafeMath.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
+pragma solidity >=0.8.0 < 0.9.0;
+import "github.com/OpenZeppelin/openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
+import "github.com/OpenZeppelin/openzeppelin-contracts/contracts/utils/math/SafeMath.sol";
 
 contract Splits is ERC721("dMusic","DM"){
 
@@ -37,22 +35,20 @@ contract Splits is ERC721("dMusic","DM"){
 		_;
 	}
 
-	constructor() public {
-		owner=msg.sender;
-	}
-
-	function isAContributor(address _from, uint _tokenId) view private returns(bool,uint){
-		require(msg.sender==_from,"Request sender and contributor address do not match");
+	function isAContributor(address _addy, uint _tokenId) view private returns(bool,uint){
 		Split[] memory Conts=Contributors[_tokenId];
 		for(uint i=0;i<=Conts.length-1;i++){
-			if(Conts[i].contributor==_from){
+			if(Conts[i].contributor==_addy){
 				return (true,i);
 			}
 		}
 		return (false,0);
 	}
 
-	
+	constructor() {
+		owner=msg.sender;
+	}
+
 	function addContributor(address _contributor, uint _tokenId, uint _split) public ownedBy(_tokenId) {
 		splitNotExceeding100(_tokenId,_split);//calls a view function and checks if splits are exceeding 100%
 		Split memory newSplit;
@@ -60,9 +56,13 @@ contract Splits is ERC721("dMusic","DM"){
 		newSplit.split=_split;
 		Contributors[_tokenId].push(newSplit);
 		tokenSplitTotal[_tokenId]=tokenSplitTotal[_tokenId].add(_split);
-
-
 	}
+
+	function addToContributorSplit(address _contributor, uint _tokenId, uint _split, uint at2)internal{
+		require(_contributor==Contributors[_tokenId][at2].contributor);
+		Contributors[_tokenId][at2].split=Contributors[_tokenId][at2].split + _split;
+	}
+
 	function createSongToken(string memory _songname, string memory  _artistname, uint _selfSplit) public returns(uint256){
 		//could use chainlink oracle for generating random number but keccak is used here instead 
 		uint256 resultId=uint256(keccak256(abi.encodePacked(_songname, ' ', _artistname)));
@@ -94,20 +94,19 @@ contract Splits is ERC721("dMusic","DM"){
 	}
 
 // Payment Part of the contract
-//Done in the same contract because solidity can't return dynamic arrays yet 
-	
-
+//Done in the same contract because solidity can't return dynamic arrays yet
     function splitMonthlyRevenue(uint _tokenId) payable ownedBy(_tokenId) public {//sends ether in msg.value 
         Split[] memory cont=Contributors[_tokenId];
+		uint256 totalContractCut=0;
         for(uint i=0; i<=cont.length-1;i++){
                 uint256 amount=(msg.value.div(100)).mul(cont[i].split);//use safe math 
-                uint256 contractCut=(amount.div(1000));
+                uint256 contractCut=amount.div(2000);  //2% fee
+				totalContractCut=totalContractCut+contractCut;
                 amount=amount.sub(contractCut);
                 address receiver=cont[i].contributor;
                 payable(receiver).transfer(amount);
                 emit ethTransferedForSplit(amount, receiver, _tokenId);
         }
-        
     }
 
 	function transferToken(address _from, address _to, uint256 _tokenId) public ownedBy(_tokenId) {
@@ -115,14 +114,22 @@ contract Splits is ERC721("dMusic","DM"){
 	}
 
 	function transferSplits(address _from, address _to, uint256 _tokenId, uint256 _percentOfWhole) public {
-		bool isACont;
+		bool fromIsACont;
+		bool toIsACont;
 		uint at;
-		(isACont,at)=isAContributor(_from,_tokenId);
-		require(isACont,"Not a Verified Contributor");
-		Split[] memory cont= Contributors[_tokenId];
-		require(_percentOfWhole<=cont[at].split);
-		cont[at].split=cont[at].split.sub(_percentOfWhole);
-		addContributor(_to,_tokenId,_percentOfWhole);
+		uint at2;
+		(fromIsACont,at)=isAContributor(_from,_tokenId);
+		require(fromIsACont,"Not a Verified Contributor");
+		(toIsACont,at2)=isAContributor(_to, _tokenId);
+		if(toIsACont==false){
+			Split[] memory cont= Contributors[_tokenId];
+			require(_percentOfWhole<=cont[at].split);
+			cont[at].split=cont[at].split.sub(_percentOfWhole);
+			addContributor(_to, _tokenId, _percentOfWhole);
+		}
+		else{
+			addToContributorSplit(_to,_tokenId,_percentOfWhole,at2);
+		}
 	}
 
 	//add cash out function for contract owner

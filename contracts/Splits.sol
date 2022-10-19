@@ -2,6 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "hardhat/console.sol";
 
 contract Splits is ERC721("dMusic", "DM") {
     using SafeMath for uint256;
@@ -81,9 +82,21 @@ contract Splits is ERC721("dMusic", "DM") {
             _split;
     }
 
+    function subSplitFromSender(
+        address _contributor,
+        uint256 _tokenId,
+        uint256 _split,
+        uint256 at
+    ) internal {
+        require(_contributor == Contributors[_tokenId][at].contributor);
+        Contributors[_tokenId][at].split =
+            Contributors[_tokenId][at].split -
+            _split;
+    }
+
     function createSongToken(
-        string memory _songname,
-        string memory _artistname,
+        string calldata _songname,
+        string calldata _artistname,
         uint256 _selfSplit
     ) public returns (uint256) {
         //could use chainlink oracle for generating random number but keccak is used here instead
@@ -171,6 +184,7 @@ contract Splits is ERC721("dMusic", "DM") {
         } else {
             addToContributorSplit(_to, _tokenId, _percentOfWhole, at2);
         }
+        subSplitFromSender(_from, _tokenId, _percentOfWhole, at);
     }
 
     //add cash out function for contract owner

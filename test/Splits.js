@@ -66,7 +66,6 @@ contract ("Splits",(accounts)=>{
             var tokenId="86806761350380312975367754058103788362278580235689859354386442452340403295653";
             await truffleAssert.reverts(contractInstance.transferToken(alice,bob,tokenId,{from:bob}));
         })
-
     })
 
     describe("Tests for transferring Splits",()=>{
@@ -89,6 +88,22 @@ contract ("Splits",(accounts)=>{
 
             expect(contBob.split.words[0]).to.equal(15)
             expect(contCarey.split.words[0]).to.equal(35)
+        })
+        it("should not be allowed to transfer more than split owned",async()=>{
+            await contractInstance.addNewArtist("Artist1",{from:alice})
+            var split1=50
+            var tokenId="86806761350380312975367754058103788362278580235689859354386442452340403295653";
+            await contractInstance.addNewArtist("Artist2",{from:bob})
+            var split2=25
+            await contractInstance.addNewArtist("Artist3",{from:carey})
+            var split3=25
+
+            await contractInstance.createSongToken("songname","Artist1",split1,{from:alice})
+            await contractInstance.addContributor(bob,tokenId,split2)
+            await contractInstance.addContributor(carey,tokenId,split3)
+            
+            await truffleAssert.reverts(contractInstance.transferSplits(bob,carey,tokenId,35));
+            
         })
     })
 })

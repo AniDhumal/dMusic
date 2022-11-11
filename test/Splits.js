@@ -1,6 +1,8 @@
 require('@nomiclabs/hardhat-truffle5');
 const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
+const { ethers } = require('hardhat')
 const { assert } = require('chai');
+// const { ethers } = require('forta-agent');
 const truffleAssert = require('truffle-assertions');
 const Splits=artifacts.require("Splits.sol");
 contract ("Splits",(accounts)=>{
@@ -47,6 +49,31 @@ contract ("Splits",(accounts)=>{
             await contractInstance.createSongToken("songname","Artist1",selfSplit,{from:alice});
             const result2=await contractInstance.createSongToken("songname2","Artist1",selfSplit,{from:alice});
             assert.equal(result2.receipt.status,true);
+        })
+    })
+    describe("Tests for adding Contributors",()=>{
+        it("Only owner should be able to add a contributor to a song", async()=>{
+            await contractInstance.addNewArtist("Artist1",{from:alice})
+            await contractInstance.createSongToken("songname","Artist1",50,{from: alice})
+            var tokenId="86806761350380312975367754058103788362278580235689859354386442452340403295653";
+            var result=await contractInstance.addContributor(bob,tokenId,40,{from: alice})
+            assert.equal(result.receipt.status,true)
+            await truffleAssert.reverts(contractInstance.addContributor(carey,tokenId,10, {from: carey}))
+        })
+        it("Contributor address should not occur twice",async()=>{
+            await contractInstance.addNewArtist("Artist1",{from:alice})
+            await contractInstance.createSongToken("songname","Artist1",50,{from: alice})
+            var tokenId="86806761350380312975367754058103788362278580235689859354386442452340403295653";
+            await contractInstance.addContributor(bob,tokenId,40,{from: alice})
+            await truffleAssert.reverts(contractInstance.addContributor(bob,tokenId,10,{from: alice}))
+        })
+
+        it("Contributor split should not exceed 100",async()=>{
+            await contractInstance.addNewArtist("Artist1",{from:alice})
+            await contractInstance.createSongToken("songname","Artist1",50,{from: alice})
+            var tokenId="86806761350380312975367754058103788362278580235689859354386442452340403295653";
+            await contractInstance.addContributor(bob,tokenId,40,{from: alice})
+            await truffleAssert.reverts(contractInstance.addContributor(bob,tokenId,11,{from: alice}))
         })
     })
     describe("Tests for transferring tokens",()=>{
@@ -103,7 +130,30 @@ contract ("Splits",(accounts)=>{
             await contractInstance.addContributor(carey,tokenId,split3)
             
             await truffleAssert.reverts(contractInstance.transferSplits(bob,carey,tokenId,35));
-            
         })
+    })
+    describe("Tests for Split monthly revenue", async()=>{
+        it("Splits distributed",async()=>{
+            await contractInstance.addNewArtist("Artist1",{from:alice})
+            var split1=50
+            var tokenId="86806761350380312975367754058103788362278580235689859354386442452340403295653";
+            await contractInstance.addNewArtist("Artist2",{from:bob})
+            var split2=25
+            await contractInstance.addNewArtist("Artist3",{from:carey})
+            var split3=25
+
+            await contractInstance.createSongToken("songname","Artist1",split1,{from:alice})
+            await contractInstance.addContributor(bob,tokenId,split2)
+            await contractInstance.addContributor(carey,tokenId,split3)
+            const contractBalance1 = await ethers.provider.getBalance(carey)
+            await contractInstance.splitMonthlyRevenue(tokenId,{value:5545000000000000000});
+            const contractBalance2 = await ethers.provider.getBalance(carey)
+            console.log("Initial Balance", contractBalance1);
+            console.log("Final Balance", contractBalance2);
+            console.log(Math.min(contractBalance1, contractBalance2));
+            expect(contractBalance2>contractBalance1).to.equal(true)
+           
+        })
+
     })
 })

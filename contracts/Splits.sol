@@ -198,11 +198,14 @@ contract Splits is ERC721("dMusic", "DM"), ReentrancyGuard {
     function getContributors(uint256 _tokenId)
         external
         view
-        returns (address[] memory arrContributors)
+        returns (address[] memory)
     {
         Split[] memory cont = Contributors[_tokenId];
-        for (uint256 i = 0; i <= cont.length - 1; i++) {
+        address[] memory arrContributors = new address[](cont.length);
+        console.log(cont.length);
+        for (uint256 i = 0; i < cont.length; i++) {
             arrContributors[i] = (cont[i].contributor);
         }
+        return arrContributors;
     }
 }

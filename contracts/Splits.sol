@@ -2,9 +2,10 @@
 pragma solidity >=0.8.0 <0.9.0;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "hardhat/console.sol";
 
-contract Splits is ERC721("dMusic", "DM") {
+contract Splits is ERC721("dMusic", "DM"), ReentrancyGuard {
     using SafeMath for uint256;
 
     address owner;
@@ -98,7 +99,7 @@ contract Splits is ERC721("dMusic", "DM") {
         string calldata _songname,
         string calldata _artistname,
         uint256 _selfSplit
-    ) public returns (uint256) {
+    ) external returns (uint256) {
         //could use chainlink oracle for generating random number but keccak is used here instead
         uint256 resultId = uint256(
             keccak256(abi.encodePacked(_songname, " ", _artistname))
@@ -118,7 +119,7 @@ contract Splits is ERC721("dMusic", "DM") {
         return resultId;
     }
 
-    function addNewArtist(string memory _artistname) public {
+    function addNewArtist(string memory _artistname) external {
         require(artistExists[_artistname] != true);
         require(addressRegistered[msg.sender] != true);
         artistNames[_artistname] = msg.sender;
@@ -140,12 +141,14 @@ contract Splits is ERC721("dMusic", "DM") {
         public
         payable
         ownedBy(_tokenId)
+        nonReentrant
     {
         //sends ether in msg.value
         Split[] memory cont = Contributors[_tokenId];
+        uint256 val = msg.value; // to avoid msg.value in a loop
         uint256 totalContractCut = 0;
         for (uint256 i = 0; i <= cont.length - 1; i++) {
-            uint256 amount = (msg.value.div(100)).mul(cont[i].split); //use safe math
+            uint256 amount = val.mul(cont[i].split).div(100); //use safe math
             uint256 contractCut = amount.div(2000); //2% fee
             totalContractCut = totalContractCut + contractCut;
             amount = amount.sub(contractCut);
@@ -168,7 +171,7 @@ contract Splits is ERC721("dMusic", "DM") {
         address _to,
         uint256 _tokenId,
         uint256 _percentOfWhole
-    ) public {
+    ) external {
         bool fromIsACont;
         bool toIsACont;
         uint256 at;
@@ -193,7 +196,7 @@ contract Splits is ERC721("dMusic", "DM") {
     }
 
     function getContributors(uint256 _tokenId)
-        public
+        external
         view
         returns (address[] memory arrContributors)
     {

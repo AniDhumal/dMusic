@@ -5,19 +5,18 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "hardhat/console.sol";
 
+///@title dMusic main contract
+///@author https://github.com/AniDhumal
+///@notice Songtokens are interpreted as ERC721 tokens. Each token may have multiple contributors with royalty splits specified
 contract Splits is ERC721("dMusic", "DM"), ReentrancyGuard {
     using SafeMath for uint256;
-
-    address owner;
 
     struct Split {
         address contributor;
         uint256 split;
     }
-
+    address owner;
     mapping(uint256 => Split[]) public Contributors; //tokenId to Split
-    // mapping(uint=>address) public tokenToOwner; //implementation from Erc721
-    // mapping(uint=>bool) public  tokenExist; //implementation from ERC721
     mapping(string => bool) public artistExists;
     mapping(string => address) public artistNames;
     mapping(address => bool) public addressRegistered;
@@ -40,6 +39,8 @@ contract Splits is ERC721("dMusic", "DM"), ReentrancyGuard {
         _;
     }
 
+    ///@return bool whether the address is already a contributor for the song or not
+    ///@return uint256 the position of the contributor if present. Returns 0 if absent.
     function isAContributor(address _addy, uint256 _tokenId)
         private
         view
@@ -58,12 +59,20 @@ contract Splits is ERC721("dMusic", "DM"), ReentrancyGuard {
         owner = msg.sender;
     }
 
+    ///@param _contributor Address of the Contributor to be added
+    ///@param _tokenId TokenId of the song
+    ///@param _split Royalty split percent to be assigned to the contributor
+    ///@dev Contributor needs to be registered first using addNewArtist()
     function addContributor(
         address _contributor,
         uint256 _tokenId,
         uint256 _split
     ) public ownedBy(_tokenId) {
         splitNotExceeding100(_tokenId, _split); //calls a view function and checks if splits are exceeding 100%
+        (bool result, ) = isAContributor(_contributor, _tokenId);
+        if (result == true) {
+            revert("already a contributor");
+        }
         Split memory newSplit;
         newSplit.contributor = _contributor;
         newSplit.split = _split;
@@ -71,6 +80,7 @@ contract Splits is ERC721("dMusic", "DM"), ReentrancyGuard {
         tokenSplitTotal[_tokenId] = tokenSplitTotal[_tokenId].add(_split);
     }
 
+    ///@dev called only by function addContributor()
     function addToContributorSplit(
         address _contributor,
         uint256 _tokenId,
@@ -128,15 +138,21 @@ contract Splits is ERC721("dMusic", "DM"), ReentrancyGuard {
         emit artistAdded(_artistname, msg.sender);
     }
 
+    ///@notice Checks if the split total exceeds 100%
     function splitNotExceeding100(uint256 _tokenId, uint256 _split)
         private
         view
     {
-        require(tokenSplitTotal[_tokenId].add(_split) <= 100);
+        require(
+            tokenSplitTotal[_tokenId].add(_split) <= 100,
+            "Split exceeds 100"
+        );
     }
 
-    // Payment Part of the contract
-    //Done in the same contract because solidity can't return dynamic arrays yet
+    ///@notice Payment Part of the contract
+    ///@dev Done in the same contract because solidity can't return dynamic arrays yet
+    ///@dev Contract cut can be ignored if the dev wishes for it to be non-profit
+    ///@dev Requires manually calling this function but calls can be automated on monthly basis. Would work better imo
     function splitMonthlyRevenue(uint256 _tokenId)
         public
         payable
@@ -158,11 +174,15 @@ contract Splits is ERC721("dMusic", "DM"), ReentrancyGuard {
         }
     }
 
+    ///@notice Transfers the ownership of the token with the split owned by the owner
     function transferToken(
         address _from,
         address _to,
         uint256 _tokenId
     ) public ownedBy(_tokenId) {
+        Split[] memory cont = Contributors[_tokenId];
+        (, uint256 at) = isAContributor(_from, _tokenId);
+        transferSplits(_from, _to, _tokenId, cont[at].split);
         transferFrom(_from, _to, _tokenId);
     }
 
@@ -171,11 +191,12 @@ contract Splits is ERC721("dMusic", "DM"), ReentrancyGuard {
         address _to,
         uint256 _tokenId,
         uint256 _percentOfWhole
-    ) external {
+    ) public {
         bool fromIsACont;
         bool toIsACont;
         uint256 at;
         uint256 at2;
+        require(_from == msg.sender, "Not authorised to transfer splits");
         (fromIsACont, at) = isAContributor(_from, _tokenId);
         require(fromIsACont, "Not a Verified Contributor");
         (toIsACont, at2) = isAContributor(_to, _tokenId);
@@ -190,11 +211,14 @@ contract Splits is ERC721("dMusic", "DM"), ReentrancyGuard {
         subSplitFromSender(_from, _tokenId, _percentOfWhole, at);
     }
 
-    //add cash out function for contract owner
+    ///@notice For the contract owner to cash out the funds collected by the contract
+    ///@dev Implementation can be completely ignored but will require modifying the logic of splitMonthlyRevenue()
     function cashOut() external payable ownerContract {
         payable(owner).transfer(address(this).balance);
     }
 
+    ///@notice getter function to get list of contributors
+    ///@return arrContributors array of contributors for the specific song token
     function getContributors(uint256 _tokenId)
         external
         view
@@ -202,7 +226,6 @@ contract Splits is ERC721("dMusic", "DM"), ReentrancyGuard {
     {
         Split[] memory cont = Contributors[_tokenId];
         address[] memory arrContributors = new address[](cont.length);
-        console.log(cont.length);
         for (uint256 i = 0; i < cont.length; i++) {
             arrContributors[i] = (cont[i].contributor);
         }

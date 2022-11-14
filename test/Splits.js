@@ -1,6 +1,6 @@
 require('@nomiclabs/hardhat-truffle5');
 const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
-const { ethers } = require('hardhat')
+const { ethers, contract } = require('hardhat')
 const { assert } = require('chai');
 // const { ethers } = require('forta-agent');
 const truffleAssert = require('truffle-assertions');
@@ -82,6 +82,7 @@ contract ("Splits",(accounts)=>{
             var selfSplit=50;
             await contractInstance.createSongToken("songname","Artist1",selfSplit,{from:alice});
             var tokenId="86806761350380312975367754058103788362278580235689859354386442452340403295653";
+
             await contractInstance.transferToken(alice,bob,tokenId,{from:alice});
             expect(await contractInstance.ownerOf("86806761350380312975367754058103788362278580235689859354386442452340403295653")).to.equal(bob)
         })
@@ -109,7 +110,7 @@ contract ("Splits",(accounts)=>{
             await contractInstance.addContributor(bob,tokenId,split2)
             await contractInstance.addContributor(carey,tokenId,split3)
             
-            await contractInstance.transferSplits(bob,carey,tokenId,10)
+            await contractInstance.transferSplits(bob,carey,tokenId,10,{from:bob})
             var contBob=await contractInstance.Contributors(tokenId,1)//0 for alice, 1 for bob and 2 for carey
             var contCarey=await contractInstance.Contributors(tokenId,2)
 
@@ -131,8 +132,24 @@ contract ("Splits",(accounts)=>{
             
             await truffleAssert.reverts(contractInstance.transferSplits(bob,carey,tokenId,35));
         })
+        it("only split owner should be able to transfer the splits", async()=>{
+            await contractInstance.addNewArtist("Artist1",{from:alice})
+            var split1=50
+            var tokenId="86806761350380312975367754058103788362278580235689859354386442452340403295653";
+            await contractInstance.addNewArtist("Artist2",{from:bob})
+            var split2=25
+            await contractInstance.addNewArtist("Artist3",{from:carey})
+            var split3=25
+
+            await contractInstance.createSongToken("songname","Artist1",split1,{from:alice})
+            await contractInstance.addContributor(bob,tokenId,split2)
+            await contractInstance.addContributor(carey,tokenId,split3)
+
+            await truffleAssert.reverts(contractInstance.transferSplits(bob,carey,tokenId,25,{from:alice}),"Not authorised to transfer splits");
+
+        })
     })
-    describe("Tests for Split monthly revenue", async()=>{
+    describe("Tests to Split monthly revenue", async()=>{
         it("Splits distributed",async()=>{
             await contractInstance.addNewArtist("Artist1",{from:alice})
             var split1=50
@@ -148,11 +165,24 @@ contract ("Splits",(accounts)=>{
             const contractBalance1 = await ethers.provider.getBalance(carey)
             await contractInstance.splitMonthlyRevenue(tokenId,{value:5545000000000000000});
             const contractBalance2 = await ethers.provider.getBalance(carey)
-            console.log("Initial Balance", contractBalance1);
-            console.log("Final Balance", contractBalance2);
             console.log(Math.min(contractBalance1, contractBalance2));
-            expect(contractBalance2>contractBalance1).to.equal(true)
-           
+            assert.isAbove(contractBalance2,contractBalance1)
+        })
+        it("Contract receives a cut", async()=>{
+            await contractInstance.addNewArtist("Artist1",{from:alice})
+            var split1=50
+            var tokenId="86806761350380312975367754058103788362278580235689859354386442452340403295653";
+            await contractInstance.addNewArtist("Artist2",{from:bob})
+            var split2=25
+            await contractInstance.addNewArtist("Artist3",{from:carey})
+            var split3=25
+            await contractInstance.createSongToken("songname","Artist1",split1,{from:alice})
+            await contractInstance.addContributor(bob,tokenId,split2)
+            await contractInstance.addContributor(carey,tokenId,split3)
+            const contractBalance1= await ethers.provider.getBalance(contractInstance.address);
+            await contractInstance.splitMonthlyRevenue(tokenId,{value:5545000000000000000});
+            const contractBalance2 = await ethers.provider.getBalance(contractInstance.address);
+            assert.isAbove(contractBalance2,contractBalance1)
         })
 
     })

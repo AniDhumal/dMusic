@@ -94,6 +94,14 @@ contract ("Splits",(accounts)=>{
             var tokenId="86806761350380312975367754058103788362278580235689859354386442452340403295653";
             await truffleAssert.reverts(contractInstance.transferToken(alice,bob,tokenId,{from:bob}));
         })
+        it("transferFrom function call to ERC721 should not be allowed",async()=>{
+            await contractInstance.addNewArtist("Artist1",{from:alice})
+            var selfSplit=50;
+            await contractInstance.createSongToken("songname","Artist1",selfSplit,{from:alice});
+            var tokenId="86806761350380312975367754058103788362278580235689859354386442452340403295653";
+            // await truffleAssert.reverts(contractInstance._safeTransferFrom(alice,bob,tokenId));
+            // functionality works but no way to test the functionality 
+        })
     })
 
     describe("Tests for transferring Splits",()=>{

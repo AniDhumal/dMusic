@@ -183,7 +183,7 @@ contract Splits is ERC721("dMusic", "DM"), ReentrancyGuard {
         Split[] memory cont = Contributors[_tokenId];
         (, uint256 at) = isAContributor(_from, _tokenId);
         transferSplits(_from, _to, _tokenId, cont[at].split);
-        transferFrom(_from, _to, _tokenId);
+        _safeTransferFrom(_from, _to, _tokenId, "");
     }
 
     function transferSplits(
